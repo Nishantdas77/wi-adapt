@@ -1,0 +1,41 @@
+# configs/experiment.yaml
+# Every pipeline setting lives here. Change a value here, not in the code.
+seed: 42
+
+paths:
+  splits: splits/captures.csv              # from make_splits.py
+  intermediate: data/intermediate_csv      # common 256-column CSV per capture
+  windows: data/windows                    # 150 x 256 float32 .npy windows
+  windows_index: splits/windows_index.csv  # provenance: window -> capture
+  reports: reports
+  results: results
+  models: models
+
+room_a:
+  # exact     : sign * mantissa * 2**exponent (true float value)
+  # autoscale : each packet shifted by one power of two so values stay below 2048
+  #             (public Nexmon convention; puts Room A on the same 0..2047 range as Room B)
+  scale: autoscale
+  # auto     : pick the order whose average spectrum shape matches Room B (development data only)
+  # fftshift : low -> high frequency      stored : order as stored by Nexmon
+  subcarrier_order: auto
+  order_check_captures: 100
+
+qc:
+  drop_nonfinite_rows: true
+  drop_all_zero_rows: true
+  drop_consecutive_duplicates: true
+
+window:
+  length: 150
+  min_shift: 50          # development windows start at least 50 rows apart
+  max_dev_windows: 3     # per development capture (keeps the two rooms balanced)
+  validation: center     # exactly one window from the middle of each validation capture
+
+normalization:
+  eps_rel: 0.001         # log(amp + eps_rel * window_mean): scale-free log
+
+task1:
+  window_lengths: [5, 10, 25, 50, 100, 150]
+  C: 1.0
+  router_variant: scale_free

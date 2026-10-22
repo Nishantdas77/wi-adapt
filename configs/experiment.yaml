@@ -39,3 +39,29 @@ task1:
   window_lengths: [5, 10, 25, 50, 100, 150]
   C: 1.0
   router_variant: scale_free
+
+task2:
+  # encoder (1D ResNet-style CNN): 256 subcarriers in, 128-number embedding out
+  width: 128
+  embed_dim: 128
+  proj_dim: 64              # projection head, used only during SimCLR training
+  # SimCLR training (development captures only, no labels)
+  epochs: 120
+  batch_size: 256
+  lr: 0.001
+  weight_decay: 0.0001
+  temperature: 0.15
+  num_threads: 0            # CPU threads for PyTorch, 0 = PyTorch default
+  samples_per_capture: 3    # random segments per development capture per epoch -> every capture counts equally
+  neighbor_max_gap: 40      # the 2 views come from 2 segments of the SAME capture at most 40 rows apart (0 = same rows)
+  time_warp: [0.85, 1.15]   # random speed change of each view (1.0 = none)
+  augment:
+    crop_len: 120           # each view: 120 rows read at a random speed
+    time_mask_max: 15       # blank up to 15 rows
+    sub_mask_max: 16        # blank up to 16 neighbouring subcarriers
+    noise_std: 0.05
+    scale_range: [0.9, 1.1]
+    # time reversal is deliberately NOT used: SITDOWN reversed looks like STANDUP
+  # evaluation
+  probe_C: 1.0              # logistic regression (official linear probe)
+  knn_k: 10                 # k-NN probe (extra)

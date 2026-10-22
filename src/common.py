@@ -74,6 +74,18 @@ def load_window(row):
     return np.load(ROOT / row["file"])
 
 
+def load_normalized_windows(rows, eps_rel=1e-3, dtype=np.float16):
+    """All windows of `rows`, each normalized on its own, as one (N, 150, 256) array.
+    float16 halves the memory (~380 MB for 5000 windows); models convert to float32."""
+    if not rows:
+        return np.zeros((0, 150, 256), dtype=dtype)
+    first = load_window(rows[0])
+    X = np.empty((len(rows),) + first.shape, dtype=dtype)
+    for i, r in enumerate(rows):
+        X[i] = normalize_window(load_window(r), eps_rel)
+    return X
+
+
 # ---------------------------------------------------------------- results
 RESULT_FIELDS = ["experiment", "target_room", "K", "metric", "value"]
 

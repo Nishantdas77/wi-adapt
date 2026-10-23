@@ -13,37 +13,42 @@
 
 *🎓 CS60055 Ubiquitous Computing · Hackathon Challenge 2: "Cross-Room Few-Shot Adaptation"*
 
+[📖 About](#-about-the-project) · [🔄 Pipeline](#-pipeline) · [📁 Folders](#-folder-structure) · [🧩 Files](#-what-each-file-does) · [⚙️ Setup](#️-setup) · [🚀 Run](#-how-to-run-from-the-start) · [🛡️ Rules](#️-rules-we-follow-leakage-control) · [👥 Contact](#-contribution-and-contact)
+
 </div>
 
 ---
 
-## About the project
+## 📖 About the project
 
 WiFi signals change when people move. The **Channel State Information (CSI)** of every WiFi packet tells us how strongly each of the 256 frequency channels (subcarriers) arrived, so a stream of packets becomes a "movie" of 256 numbers per moment. From it we can recognise activities like sitting, walking or falling, with no camera.
 
-The problem: the **room** changes the signal too. A model trained in one room often fails in another. This project asks: *if we install the system in a new room and can label only a few examples, how well can it still recognise activities?*
+> [!IMPORTANT]
+> **The problem:** the **room** changes the signal too. A model trained in one room often fails in another.
+> This project asks: *if we install the system in a new room and can label only a few examples, how well can it still recognise activities?*
 
 We use the **CSI Human Activity dataset** (Schäfer et al., 2021) with two rooms:
 
-| | Room A (Experiment 2) | Room B (Experiment 3) |
+| | 🅰️ Room A (Experiment 2) | 🅱️ Room B (Experiment 3) |
 |---|---|---|
-| Raw format | `.pcap` (raw Nexmon packets, BCM4366c0, 80 MHz) | `.csv` (amplitude, 256 columns) |
-| Activities | SIT, STAND, WALK, SITDOWN, STANDUP, FALL | EMPTY, LYING, SIT, STAND, WALK |
-| Captures | 934 development + 150 validation | 1,076 development + 125 validation |
+| 📦 **Raw format** | `.pcap` (raw Nexmon packets, BCM4366c0, 80 MHz) | `.csv` (amplitude, 256 columns) |
+| 🏃 **Activities** | SIT, STAND, WALK, SITDOWN, STANDUP, FALL | EMPTY, LYING, SIT, STAND, WALK |
+| 🗂️ **Captures** | 934 development + 150 validation | 1,076 development + 125 validation |
 
 The project has three tasks:
 
-| Task | Question | Our approach |
-|---|---|---|
-| **1. Room identification** | Which room is this 150 × 256 window from? | Logistic regression on per-subcarrier statistics. Also used as the **router** in Task 3. |
-| **2. Learn without labels** | Can a network learn useful CSI features with no labels? | **SimCLR** on a 1D ResNet-style CNN, then a frozen **linear probe**, compared with random weights and handcrafted features |
-| **3. Cross-room few-label adaptation** | Can we recognise activities in a room using only K labelled captures from it? | Frozen SimCLR encoder + per-room normalization + **prototypes** (nearest class average) + predicted-room routing |
+| | Task | Question | Our approach |
+|---|---|---|---|
+| 🟢 | **1. Room identification** | Which room is this 150 × 256 window from? | Logistic regression on per-subcarrier statistics. Also used as the **router** in Task 3. |
+| 🟣 | **2. Learn without labels** | Can a network learn useful CSI features with no labels? | **SimCLR** on a 1D ResNet-style CNN, then a frozen **linear probe**, compared with random weights and handcrafted features |
+| 🔴 | **3. Cross-room few-label adaptation** | Can we recognise activities in a room using only K labelled captures from it? | Frozen SimCLR encoder + per-room normalization + **prototypes** (nearest class average) + predicted-room routing |
 
-Everything, from reading the raw packets to the final predictions, is our own Python code. The source authors' MATLAB code is not used.
+> [!NOTE]
+> Everything, from reading the raw packets to the final predictions, is **our own Python code**. The source authors' MATLAB code is not used.
 
 ---
 
-## Pipeline
+## 🔄 Pipeline
 
 ```mermaid
 flowchart TD
@@ -82,14 +87,22 @@ flowchart TD
     classDef demo fill:#FFFDE7,stroke:#F9A825,color:#F57F17
 ```
 
-Colours: 🔵 raw data · 🟠 data pipeline · 🟢 Task 1 · 🟣 Task 2 · 🔴 Task 3 · 🟡 live demo
+<div align="center">
+
+🔵 raw data &nbsp;·&nbsp; 🟠 data pipeline &nbsp;·&nbsp; 🟢 Task 1 &nbsp;·&nbsp; 🟣 Task 2 &nbsp;·&nbsp; 🔴 Task 3 &nbsp;·&nbsp; 🟡 live demo
+
+</div>
 
 ---
 
-## Folder structure
+## 📁 Folder structure
 
-**Pushed to GitHub:** `src/`, `configs/`, `requirements.txt`, `.gitignore`, `README.md`, `episodes/test1/README.md`, `splits/`, `reports/`, `results/`, and the technical report.
-**Not pushed:** `data/` and `models/`. They are created when you run the pipeline (the dataset must not be committed).
+| ✅ Pushed to GitHub | ❌ Not pushed |
+|---|---|
+| `src/`, `configs/`, `requirements.txt`, `.gitignore`, `README.md`, `episodes/test1/README.md`, `splits/`, `reports/`, `results/`, and the technical report | `data/` and `models/`. They are created when you run the pipeline (the dataset must not be committed). |
+
+<details open>
+<summary><b>🌳 Click to show / hide the full tree</b></summary>
 
 ```
 wi-adapt/
@@ -157,41 +170,43 @@ wi-adapt/
         ├── amplitude/  task1/  task2/  task3/
 ```
 
+</details>
+
 ---
 
-## What each file does
+## 🧩 What each file does
 
-### Files you run
+### ▶️ Files you run
 
 | # | File | What it does | Creates |
-|---|---|---|---|
-| 1 | `src/make_splits.py` | Lists every capture of both rooms and fixes the **development / validation split** at capture level. Room A: the supplied `validation/` folder. Room B: 25 per class, sorted filenames, seed 42. | `splits/captures.csv`, `splits/split_info.json` |
-| 2 | `src/build_intermediate.py` | Brings both rooms into **one common format**: decodes Room A, reads Room B, applies quality control and writes one 256-column CSV per capture | `data/intermediate_csv/`, `reports/qc_log.csv`, `reports/qc_summary.txt` |
-| 3 | `src/make_windows.py` | Cuts the official **150 × 256 windows**: 1 from the middle of each validation capture, up to 3 per development capture | `data/windows/`, `splits/windows_index.csv` |
-| 4 | `src/plot_amplitude.py` | **Amplitude plots** for every activity in every room | `results/figures/amplitude/` |
-| 5 | `src/task1_room.py` | **Task 1:** room classifier, accuracy vs window length, confusion matrix. Saves the **router**. | `results/tables/task1_*`, `results/figures/task1/`, `models/task1_router.joblib` |
-| 6 | `src/task2_simclr_train.py` | **Task 2, part 1:** trains the encoder with **SimCLR** on development captures, **no labels** | `models/task2_simclr_encoder.pt`, training curve |
-| 7 | `src/task2_evaluate.py` | **Task 2, part 2:** frozen encoder → **linear probe** (+ k-NN extra), compared with random weights and handcrafted features, plus UMAP / t-SNE plots | `results/tables/task2_*`, `results/figures/task2/`, `models/task2_simclr_embeddings.npz` |
-| 8 | `src/task3_fewshot.py` | **Task 3:** K-shot cross-room adaptation, both directions, K = 1/5/10/20, 5 seeds, routing comparison, SSL comparison, confusion matrices | `results/tables/task3_*`, `results/figures/task3/`, `splits/support/` |
-| 9 | `src/run_episode.py` | **Live demo:** raw `.pcap` / `.csv` file(s) → room + activity predictions | `episodes/<name>/predictions.csv` |
+|:-:|---|---|---|
+| 1️⃣ | `src/make_splits.py` | Lists every capture of both rooms and fixes the **development / validation split** at capture level. Room A: the supplied `validation/` folder. Room B: 25 per class, sorted filenames, seed 42. | `splits/captures.csv`, `splits/split_info.json` |
+| 2️⃣ | `src/build_intermediate.py` | Brings both rooms into **one common format**: decodes Room A, reads Room B, applies quality control and writes one 256-column CSV per capture | `data/intermediate_csv/`, `reports/qc_log.csv`, `reports/qc_summary.txt` |
+| 3️⃣ | `src/make_windows.py` | Cuts the official **150 × 256 windows**: 1 from the middle of each validation capture, up to 3 per development capture | `data/windows/`, `splits/windows_index.csv` |
+| 4️⃣ | `src/plot_amplitude.py` | **Amplitude plots** for every activity in every room | `results/figures/amplitude/` |
+| 5️⃣ | `src/task1_room.py` | 🟢 **Task 1:** room classifier, accuracy vs window length, confusion matrix. Saves the **router**. | `results/tables/task1_*`, `results/figures/task1/`, `models/task1_router.joblib` |
+| 6️⃣ | `src/task2_simclr_train.py` | 🟣 **Task 2, part 1:** trains the encoder with **SimCLR** on development captures, **no labels** | `models/task2_simclr_encoder.pt`, training curve |
+| 7️⃣ | `src/task2_evaluate.py` | 🟣 **Task 2, part 2:** frozen encoder → **linear probe** (+ k-NN extra), compared with random weights and handcrafted features, plus UMAP / t-SNE plots | `results/tables/task2_*`, `results/figures/task2/`, `models/task2_simclr_embeddings.npz` |
+| 8️⃣ | `src/task3_fewshot.py` | 🔴 **Task 3:** K-shot cross-room adaptation, both directions, K = 1/5/10/20, 5 seeds, routing comparison, SSL comparison, confusion matrices | `results/tables/task3_*`, `results/figures/task3/`, `splits/support/` |
+| 9️⃣ | `src/run_episode.py` | 🟡 **Live demo:** raw `.pcap` / `.csv` file(s) → room + activity predictions | `episodes/<name>/predictions.csv` |
 
-### Helper files (not run directly)
+### 🧰 Helper files (not run directly)
 
 | File | What it does |
 |---|---|
-| `src/csi_decode.py` | Reads raw files. Room A: pcap → UDP port 5500 → 18-byte Nexmon header → 1,024 CSI bytes → 256 complex values (sign-mantissa-exponent format) → amplitude. Room B: CSV without its header row. |
-| `src/common.py` | Shared tools: load the config, per-window normalization, load windows, write results |
-| `src/models.py` | The 1D ResNet-style CNN encoder and the SimCLR projection head |
-| `src/fewshot.py` | The Task 3 method: per-room normalization, prototypes, classification, self-training |
-| `configs/experiment.yaml` | Every setting (seed, QC rules, window size, model and training settings, K values) |
+| 📶 `src/csi_decode.py` | Reads raw files. Room A: pcap → UDP port 5500 → 18-byte Nexmon header → 1,024 CSI bytes → 256 complex values (sign-mantissa-exponent format) → amplitude. Room B: CSV without its header row. |
+| 🔧 `src/common.py` | Shared tools: load the config, per-window normalization, load windows, write results |
+| 🧠 `src/models.py` | The 1D ResNet-style CNN encoder and the SimCLR projection head |
+| 🎯 `src/fewshot.py` | The Task 3 method: per-room normalization, prototypes, classification, self-training |
+| ⚙️ `configs/experiment.yaml` | Every setting (seed, QC rules, window size, model and training settings, K values) |
 
 ---
 
-## Setup
+## ⚙️ Setup
 
-**1. Python:** 3.10 – 3.12 recommended. Newer versions work if PyTorch supports them.
+**1️⃣ Python:** 3.10 – 3.12 recommended. Newer versions work if PyTorch supports them.
 
-**2. Get the code and make a virtual environment:**
+**2️⃣ Get the code and make a virtual environment:**
 
 ```bash
 git clone https://github.com/Nishantdas77/wi-adapt.git
@@ -204,84 +219,99 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**3. Get the data** (not included in this repository):
+**3️⃣ Get the data** (not included in this repository):
 
-- Download the data package shared by the teaching team (CSI Human Activity dataset, [IEEE DataPort](https://ieee-dataport.org/open-access/csi-human-activity)).
-- Unzip it and place the folders so that you have `data/raw/Experiment-2/` and `data/raw/Experiment-3/` (layout shown above).
-- Delete archive leftovers: every `__MACOSX` folder and `.DS_Store` file.
-- Delete or move outside the project the source authors' `matlab code` and `Results` folders. They are not used and not allowed.
+- 📥 Download the data package shared by the teaching team (CSI Human Activity dataset, [IEEE DataPort](https://ieee-dataport.org/open-access/csi-human-activity)).
+- 📂 Unzip it and place the folders so that you have `data/raw/Experiment-2/` and `data/raw/Experiment-3/` (layout shown above).
+- 🧹 Delete archive leftovers: every `__MACOSX` folder and `.DS_Store` file.
+
+> [!WARNING]
+> Delete or move outside the project the source authors' `matlab code` and `Results` folders. They are not used and not allowed.
 
 ---
 
-## How to run (from the start)
+## 🚀 How to run (from the start)
 
-Run every command from the **main project folder** (`wi-adapt/`), not from inside `src/`.
+> [!TIP]
+> Run every command from the **main project folder** (`wi-adapt/`), not from inside `src/`.
 
-| Step | Command | Time (CPU, approx.) |
+| Step | Command | ⏱️ Time (CPU, approx.) |
 |---|---|---|
-| 1. Split | `python src/make_splits.py` | seconds |
-| 2. Common format + QC | `python src/build_intermediate.py` | a few minutes |
-| 3. Windows | `python src/make_windows.py` | a few minutes |
-| 4. Amplitude plots | `python src/plot_amplitude.py` | ~1 minute |
-| 5. Task 1 | `python src/task1_room.py` | ~1–2 minutes |
-| 6. Task 2: quick check | `python src/task2_simclr_train.py --quick` | ~1–2 minutes (+ a one-time cache build) |
-| 7. Task 2: train | `python src/task2_simclr_train.py` | ~30–50 minutes |
-| 8. Task 2: evaluate | `python src/task2_evaluate.py` | a few minutes |
-| 9. Task 3 | `python src/task3_fewshot.py` | a few minutes |
+| 1️⃣ Split | `python src/make_splits.py` | seconds |
+| 2️⃣ Common format + QC | `python src/build_intermediate.py` | a few minutes |
+| 3️⃣ Windows | `python src/make_windows.py` | a few minutes |
+| 4️⃣ Amplitude plots | `python src/plot_amplitude.py` | ~1 minute |
+| 5️⃣ 🟢 Task 1 | `python src/task1_room.py` | ~1–2 minutes |
+| 6️⃣ 🟣 Task 2: quick check | `python src/task2_simclr_train.py --quick` | ~1–2 minutes (+ a one-time cache build) |
+| 7️⃣ 🟣 Task 2: train | `python src/task2_simclr_train.py` | ~30–50 minutes |
+| 8️⃣ 🟣 Task 2: evaluate | `python src/task2_evaluate.py` | a few minutes |
+| 9️⃣ 🔴 Task 3 | `python src/task3_fewshot.py` | a few minutes |
 
 Each step uses only what the steps before it created. If you change a setting in `configs/experiment.yaml`, rerun from the step that uses it.
 
-### Live demo: predict new files
+### 🟡 Live demo: predict new files
 
-1. Put the `.pcap` (Room A style) or `.csv` (Room B style) file(s) in `episodes/test1/`.
-2. Run:
+**1.** Put the `.pcap` (Room A style) or `.csv` (Room B style) file(s) in `episodes/test1/`.
+
+**2.** Run:
 
 ```bash
 python src/run_episode.py episodes/test1
 ```
 
-3. Read `episodes/test1/predictions.csv`:
+**3.** Read `episodes/test1/predictions.csv`:
 
 | Column | Meaning |
 |---|---|
-| `window_id` | `<file name>_w<number>` |
-| `room` | Predicted room (A or B), from the signal only |
-| `label` | Predicted activity |
-| `confidence` | How sure the model is (0–1) |
-| `source_file`, `start_row`, `n_rows`, `room_confidence`, `note` | Extra information (`note = short_window` if the file had fewer than 150 valid rows) |
+| 🆔 `window_id` | `<file name>_w<number>` |
+| 🏠 `room` | Predicted room (A or B), from the signal only |
+| 🏃 `label` | Predicted activity |
+| 📈 `confidence` | How sure the model is (0–1) |
+| ℹ️ `source_file`, `start_row`, `n_rows`, `room_confidence`, `note` | Extra information (`note = short_window` if the file had fewer than 150 valid rows) |
 
-How it decides: the Task 1 router predicts the room. Room A uses the **B → A** model, Room B uses the **A → B** model (Task 3 setup, K = 5). Options: `--mode full` (activity model with all development labels, for comparison), `--all-windows` (one prediction per 150-row window), `--out <file>`. File names are never used for prediction; the file type only selects the reader.
-
----
-
-## Rules we follow (leakage control)
-
-- **Capture-level split:** all windows of a capture stay in the same split. Room A uses the supplied validation folder; Room B uses 25 captures per class, sorted filenames, seed 42.
-- **Validation is used only for scoring:** never for training, normalization, model fitting or Task 3 support.
-- **No metadata as features:** file names, folders, extensions, capture length and packet count are never model inputs.
-- **Task 2 has no labels in SSL:** the encoder never sees activity or room labels.
-- **Task 3:** support captures come only from the **target room's development** captures. K = distinct captures. Target labels of SIT, STAND and WALK are never used.
+> [!NOTE]
+> **How it decides:** the Task 1 router predicts the room. Room A uses the **B → A** model, Room B uses the **A → B** model (Task 3 setup, K = 5).
+> **Options:** `--mode full` (activity model with all development labels, for comparison), `--all-windows` (one prediction per 150-row window), `--out <file>`.
+> File names are never used for prediction; the file type only selects the reader.
 
 ---
 
-## Contribution and contact
+## 🛡️ Rules we follow (leakage control)
 
-| Member | Roll number | Contact |
+| | Rule |
+|:-:|---|
+| ✂️ | **Capture-level split:** all windows of a capture stay in the same split. Room A uses the supplied validation folder; Room B uses 25 captures per class, sorted filenames, seed 42. |
+| 🔒 | **Validation is used only for scoring:** never for training, normalization, model fitting or Task 3 support. |
+| 🚫 | **No metadata as features:** file names, folders, extensions, capture length and packet count are never model inputs. |
+| 🙈 | **Task 2 has no labels in SSL:** the encoder never sees activity or room labels. |
+| 🎯 | **Task 3:** support captures come only from the **target room's development** captures. K = distinct captures. Target labels of SIT, STAND and WALK are never used. |
+
+---
+
+## 👥 Contribution and contact
+
+| 👤 Member | 🎓 Roll number | 📧 Contact |
 |---|---|---|
 | Nishant Kumar Das | 25CS72P06 | [dasnishant7777](mailto:dasnishant7777@gmail.com) |
 
+🤖 **AI use:** AI tools were used during development, as disclosed in the technical report (AI-use disclosure section).
 
-**AI use:** AI tools were used during development, as disclosed in the technical report (AI-use disclosure section).
+📄 **Technical report:** [`report/technical_report.pdf`](report/technical_report.pdf)
 
-**Technical report:** [`report/technical_report.pdf`]
-
-## References
-
-1. CSI Human Activity dataset, IEEE DataPort: https://ieee-dataport.org/open-access/csi-human-activity
-2. J. Schäfer, B. R. Barrsiwal, M. Kokhkharova, H. Adil, J. Liebehenschel. "Human Activity Recognition Using CSI Information with Nexmon." *Applied Sciences*, 2021, 11(19), 8860. https://doi.org/10.3390/app11198860
-3. Nexmon CSI (public documentation of the CSI extraction and format): https://github.com/seemoo-lab/nexmon_csi
-4. T. Chen, S. Kornblith, M. Norouzi, G. Hinton. "A Simple Framework for Contrastive Learning of Visual Representations" (SimCLR). ICML 2020.
-5. J. Snell, K. Swersky, R. Zemel. "Prototypical Networks for Few-shot Learning." NeurIPS 2017.
 ---
 
-*Built for CS60055 Ubiquitous Computing course (Term Project) — IIT Kharagpur*
+## 📚 References
+
+1. 📊 CSI Human Activity dataset, IEEE DataPort: https://ieee-dataport.org/open-access/csi-human-activity
+2. 📝 J. Schäfer, B. R. Barrsiwal, M. Kokhkharova, H. Adil, J. Liebehenschel. "Human Activity Recognition Using CSI Information with Nexmon." *Applied Sciences*, 2021, 11(19), 8860. https://doi.org/10.3390/app11198860
+3. 📶 Nexmon CSI (public documentation of the CSI extraction and format): https://github.com/seemoo-lab/nexmon_csi
+4. 🧠 T. Chen, S. Kornblith, M. Norouzi, G. Hinton. "A Simple Framework for Contrastive Learning of Visual Representations" (SimCLR). ICML 2020.
+5. 🎯 J. Snell, K. Swersky, R. Zemel. "Prototypical Networks for Few-shot Learning." NeurIPS 2017.
+
+---
+
+<div align="center">
+
+*🏛️ Built for CS60055 Ubiquitous Computing course (Term Project) — IIT Kharagpur*
+
+</div>

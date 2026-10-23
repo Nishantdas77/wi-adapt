@@ -1,0 +1,6 @@
+activity,precision,recall,f1,support_pooled_over_seeds
+EMPTY,0.5662,0.616,0.59,125
+LYING,0.4412,0.48,0.4598,125
+SIT,0.3291,0.208,0.2549,125
+STAND,0.3926,0.512,0.4444,125
+WALK,0.5225,0.464,0.4915,125

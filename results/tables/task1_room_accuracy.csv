@@ -1,0 +1,13 @@
+variant,window_length,accuracy,accuracy_roomA,accuracy_roomB,n_validation
+with_scale,5,0.9963,0.9932,1.0,272
+with_scale,10,0.9963,0.9932,1.0,272
+with_scale,25,1.0,1.0,1.0,272
+with_scale,50,1.0,1.0,1.0,272
+with_scale,100,1.0,1.0,1.0,272
+with_scale,150,0.9963,0.9932,1.0,272
+scale_free,5,1.0,1.0,1.0,272
+scale_free,10,1.0,1.0,1.0,272
+scale_free,25,1.0,1.0,1.0,272
+scale_free,50,1.0,1.0,1.0,272
+scale_free,100,1.0,1.0,1.0,272
+scale_free,150,1.0,1.0,1.0,272

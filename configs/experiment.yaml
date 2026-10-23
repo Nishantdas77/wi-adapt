@@ -76,3 +76,7 @@ task3:
   self_training:             # extra: refine prototypes with confident pseudo-labels on TARGET DEV windows
     rounds: 3
     top_fraction: 0.3
+
+episode:                     # run_episode.py ready-made activity model (--mode fewshot)
+  K: 5                       # support captures per target-exclusive activity (development data)
+  seed: 0                    # which Task 3 support pick to use

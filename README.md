@@ -194,7 +194,7 @@ wi-adapt/
 **2. Get the code and make a virtual environment:**
 
 ```bash
-git clone [ADD REPO URL]
+git clone https://github.com/Nishantdas77/wi-adapt.git
 cd wi-adapt
 python -m venv .venv
 # Windows:

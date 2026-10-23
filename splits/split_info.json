@@ -1,0 +1,12 @@
+{
+  "seed": 42,
+  "val_per_class": 25,
+  "room_A_rule": "validation = supplied validation/ folder",
+  "room_B_rule": "per class: sort filenames with Python sorted() by name, then random.Random(42).sample(files, 25)",
+  "counts": {
+    "A_development": 934,
+    "A_validation": 150,
+    "B_development": 1076,
+    "B_validation": 125
+  }
+}

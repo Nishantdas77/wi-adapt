@@ -65,3 +65,14 @@ task2:
   # evaluation
   probe_C: 1.0              # logistic regression (official linear probe)
   knn_k: 10                 # k-NN probe (extra)
+
+task3:
+  feature_sets: [simclr, random, handcrafted]   # SSL contribution: trained encoder vs untrained vs no network
+  main_features: simclr
+  K_values: [1, 5, 10, 20]
+  n_seeds: 5                 # different support picks per K (picks are nested: K=1 is inside K=5 ...)
+  normalization: zscore      # per-room standardization of features, fitted on that room's DEV windows, no labels
+  temperature: 0.1           # softmax temperature that turns similarities into a confidence
+  self_training:             # extra: refine prototypes with confident pseudo-labels on TARGET DEV windows
+    rounds: 3
+    top_fraction: 0.3

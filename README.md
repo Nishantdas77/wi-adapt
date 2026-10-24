@@ -150,7 +150,7 @@ wi-adapt/
 ├── models/                        NOT pushed, created by running
 │   ├── task1_router.joblib
 │   ├── task2_simclr_encoder.pt    task2_simclr_embeddings.npz
-│   └── episode_model_fewshot.joblib
+│   └── episode_model_fewshot_K5_seed0.joblib   (both models: B→A and A→B)
 │
 ├── splits/                        created, pushed (provenance)
 │   ├── captures.csv               every capture: room, label, development / validation
@@ -271,7 +271,7 @@ python src/run_episode.py episodes/test1
 
 > [!NOTE]
 > **How it decides:** the Task 1 router predicts the room. Room A uses the **B → A** model, Room B uses the **A → B** model (Task 3 setup, K = 5).
-> **Options:** `--mode full` (activity model with all development labels, for comparison), `--all-windows` (one prediction per 150-row window), `--out <file>`.
+> **Options:** `--K <n>` (support captures per target-only activity: 1, 5, 10 or 20, default 5), `--all-windows` (one prediction per 150-row window), `--out <file>`, `--rebuild` (after retraining Task 2).
 > File names are never used for prediction; the file type only selects the reader.
 
 ---

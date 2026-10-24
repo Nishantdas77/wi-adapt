@@ -8,11 +8,14 @@ and it writes room + activity predictions in the required format.
     python src/run_episode.py episodes/test1/some_file.pcap  # one file
     options:
       --out PATH        where to write the predictions (default: <folder>/predictions.csv)
-      --mode fewshot    (default) Task 3 system: shared activities from the OTHER room,
-                        exclusive activities from K support captures (development data)
-      --mode full       comparison: activity model trained on ALL development labels of the room
       --all-windows     one prediction per 150-row window (default: one window from the middle)
-      --rebuild         rebuild the ready-made activity model
+      --K N             support captures per target-exclusive activity (default from
+                        configs/experiment.yaml -> episode.K, e.g. 1, 5, 10, 20)
+      --seed S          which support pick (default: episode.seed)
+      --rebuild         rebuild the ready-made activity model (after retraining Task 2)
+
+Activity model = the Task 3 system only: shared activities (SIT, STAND, WALK) from the
+OTHER room's labels, target-only activities from K support captures (development data only).
 
 Pipeline (same code as development / validation):
   read (.pcap: decode CSI -> amplitude | .csv: skip header) -> QC -> 150 x 256 window
@@ -56,8 +59,9 @@ def room_a_order(cfg):
     return "fftshift"
 
 
-def build_model(cfg, mode, path):
-    """Built ONLY from development windows + their frozen SimCLR embeddings."""
+def build_model(cfg, path, K=5, seed=0):
+    """Task 3 prototypes for both target rooms, built ONLY from development windows
+    + their frozen SimCLR embeddings (same rules as task3_fewshot.py)."""
     emb_path = path_of(cfg, "models") / "task2_simclr_embeddings.npz"
     if not emb_path.exists():
         raise SystemExit("models/task2_simclr_embeddings.npz missing: run task2_evaluate.py first.")
@@ -69,31 +73,28 @@ def build_model(cfg, mode, path):
     y = np.array([r["label"] for r in dev])
     cap = np.array([r["capture_id"] for r in dev])
     t3 = cfg["task3"]
-    model = {"mode": mode, "rooms": {}}
-
-    if mode == "fewshot":
-        from task3_fewshot import make_support
-        K, seed = int(cfg.get("episode", {}).get("K", 5)), int(cfg.get("episode", {}).get("seed", 0))
-        support = make_support(cfg, dev)                     # same picks as Task 3
-        model.update({"K": K, "seed": seed})
-        for t in ("A", "B"):                                  # t = target room of the file
-            s = OTHER[t]
-            st_t = fit_stats(F[room == t], t3["normalization"])
-            st_s = fit_stats(F[room == s], t3["normalization"])
-            caps = [c for lab in EXCLUSIVE[t] for c in support[(t, seed, lab)][:K]]
-            sup = (room == t) & np.isin(cap, caps)
-            P = np.vstack([prototypes(normalize(F[room == s], st_s), y[room == s], SHARED),
-                           prototypes(normalize(F[sup], st_t), y[sup], EXCLUSIVE[t])])
-            model["rooms"][t] = {"stats": st_t, "P": P, "classes": SHARED + EXCLUSIVE[t],
-                                 "support_captures": caps}
-    else:
-        from task2_evaluate import fit_probe
-        for t in ("A", "B"):
-            m = room == t
-            model["rooms"][t] = {"probe": fit_probe("linear", F[m], y[m], cfg)}
+    from task3_fewshot import make_support
+    support = make_support(cfg, dev)                          # same picks as Task 3
+    kmax = max(len(v) for v in support.values())
+    if K > kmax:
+        raise SystemExit(f"K={K} is larger than the prepared support list ({kmax}). "
+                         "Use K <= max(task3.K_values) in configs/experiment.yaml.")
+    if seed >= t3["n_seeds"]:
+        raise SystemExit(f"seed must be below task3.n_seeds ({t3['n_seeds']}).")
+    model = {"K": K, "seed": seed, "rooms": {}}
+    for t in ("A", "B"):                                      # t = target room of the file
+        s = OTHER[t]
+        st_t = fit_stats(F[room == t], t3["normalization"])
+        st_s = fit_stats(F[room == s], t3["normalization"])
+        caps = [c for lab in EXCLUSIVE[t] for c in support[(t, seed, lab)][:K]]
+        sup = (room == t) & np.isin(cap, caps)
+        P = np.vstack([prototypes(normalize(F[room == s], st_s), y[room == s], SHARED),
+                       prototypes(normalize(F[sup], st_t), y[sup], EXCLUSIVE[t])])
+        model["rooms"][t] = {"stats": st_t, "P": P, "classes": SHARED + EXCLUSIVE[t],
+                             "support_captures": caps}
     path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, path)
-    print(f"built ready-made activity model ({mode}) -> {path.relative_to(ROOT)}")
+    print(f"built ready-made activity model (K={K}, seed {seed}) -> {path.relative_to(ROOT)}")
     return model
 
 
@@ -125,8 +126,9 @@ def main():
     ap = argparse.ArgumentParser(description="Predict room + activity for raw .pcap / .csv files")
     ap.add_argument("input", help="a .pcap/.csv file or a folder with such files")
     ap.add_argument("--out", default=None)
-    ap.add_argument("--mode", choices=["fewshot", "full"], default="fewshot")
     ap.add_argument("--all-windows", action="store_true")
+    ap.add_argument("--K", type=int, default=None)
+    ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--rebuild", action="store_true")
     args = ap.parse_args()
 
@@ -152,16 +154,19 @@ def main():
     from task1_room import features as router_features
     router = joblib.load(mdir / "task1_router.joblib")
     encoder, _ = load_encoder(mdir / "task2_simclr_encoder.pt")
-    model_path = mdir / f"episode_model_{args.mode}.joblib"
-    model = build_model(cfg, args.mode, model_path) if (args.rebuild or not model_path.exists()) \
-        else joblib.load(model_path)
+    ep = cfg.get("episode", {})
+    K = args.K if args.K is not None else int(ep.get("K", 5))
+    seed = args.seed if args.seed is not None else int(ep.get("seed", 0))
+    model_path = mdir / f"episode_model_fewshot_K{K}_seed{seed}.joblib"   # one saved model per K / seed
+    model = build_model(cfg, model_path, K, seed) \
+        if (args.rebuild or not model_path.exists()) else joblib.load(model_path)
     order = room_a_order(cfg)
     eps = cfg["normalization"]["eps_rel"]
     tau = cfg["task3"]["temperature"]
 
     # ---- predict ----
     rows = []
-    print(f"\n{len(files)} file(s) | mode {args.mode} | Room A subcarrier order {order}\n")
+    print(f"\n{len(files)} file(s) | Task 3 model (K={K}, seed={seed}) | Room A subcarrier order {order}\n")
     for path in files:
         try:
             amp = read_file(path, cfg, order)
@@ -182,13 +187,9 @@ def main():
             room = str(router["model"].predict(f)[0])
             room_conf = float(router["model"].predict_proba(f).max())
             h = embed_windows(encoder, normalize_window(w, eps)[None])
-            rm = model["rooms"][room]
-            if model["mode"] == "fewshot":
-                lab, conf = classify(normalize(h, rm["stats"]), rm["P"], rm["classes"], tau)
-                lab, conf = str(lab[0]), float(conf[0])
-            else:
-                proba = rm["probe"].predict_proba(h)[0]
-                lab, conf = str(rm["probe"].classes_[proba.argmax()]), float(proba.max())
+            rm = model["rooms"][room]                     # room A -> B->A model, room B -> A->B model
+            lab, conf = classify(normalize(h, rm["stats"]), rm["P"], rm["classes"], tau)
+            lab, conf = str(lab[0]), float(conf[0])
             rows.append({"window_id": f"{path.stem}_w{i}", "room": room, "label": lab,
                          "confidence": round(conf, 4), "source_file": path.name,
                          "start_row": start, "n_rows": len(w),

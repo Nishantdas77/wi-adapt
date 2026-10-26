@@ -2,7 +2,7 @@ QC SUMMARY
 ============================================================
 preprocess_version: e70dc133
 Room A scale: autoscale
-Room A subcarrier order: fftshift  {'corr_stored': -0.1107234141728838, 'corr_fftshift': 0.40310399345824766}
+Room A subcarrier order: fftshift  {'corr_stored': -0.11072341417288396, 'corr_fftshift': 0.40310399345824843}
 
 Room A development  captures   934 | raw rows  201371 | bad packets   2 | nonfinite   0 | all-zero    0 | duplicates      0 | kept  201369 | NOT eligible (<150 rows)   9
 Room A validation   captures   150 | raw rows   32650 | bad packets   0 | nonfinite   0 | all-zero    0 | duplicates      0 | kept   32650 | NOT eligible (<150 rows)   3
